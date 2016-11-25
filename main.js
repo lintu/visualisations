@@ -1,6 +1,5 @@
 (function () {
     var durrr = document.getElementById('durrr');
-    var ctx = durrr.getContext('2d');
     var WIDTH = durrr.clientWidth;
     var HEIGHT = durrr.clientHeight;
 
@@ -16,10 +15,18 @@
     var channel1FrequencyData;
     var channel2FrequencyData;
 
+    //threejs
+    var SEPARATION = 100;
+    var AMOUNTX = 32;
+    var AMOUNTY = 32;
+    var camera, scene, renderer, particle;
+    var mouseX = 0, mouseY = 0, mouseZ = 0;
 
     source.connect(splitter);
     splitter.connect(analyser1, 0, 0);
-    splitter.connect(analyser1, 1, 0);
+    splitter.connect(analyser2, 1, 0);
+    var windowHalfX = window.innerWidth / 2;
+    var windowHalfY = window.innerHeight / 2;
 
     analyser1.connect(merger, 0, 0);
     analyser2.connect(merger, 0, 1);
@@ -30,33 +37,106 @@
 
     fetchSound();
 
+    initThree();
+
+    function initThree() {
+        camera = new THREE.PerspectiveCamera(100, 0.7, 1, 10000);
+        camera.position.z = 1000;
+        var cameraHelper =  new THREE.CameraHelper(camera);
+        
+        scene = new THREE.Scene();
+        //scene.add(cameraHelper);
+        var color = '#e242f4';
+        var material = new THREE.MeshLambertMaterial({
+            
+        });
+        var geometry = new THREE.BoxGeometry(10, 10, 10);
+        var colorCounter = 0;
+        for (var ix = 0; ix < AMOUNTX; ix++) {
+            for (var iy = 0; iy < AMOUNTY; iy++) {
+                colorCounter++;
+                if (colorCounter % 200 == 0) {
+                    color = getColor(color);
+                }
+
+                particle = new THREE.Mesh(geometry, material);
+                particle.castShadow = true;
+                //particle.scale.y = 100;
+                particle.material.color.set('yellow');
+                particle.position.x = ix * SEPARATION - ((AMOUNTX * SEPARATION) / 2);
+                particle.position.z = iy * SEPARATION - ((AMOUNTY * SEPARATION) / 2);
+                scene.add(particle);
+            }
+        }
+        var bgMterial = new THREE.MeshLambertMaterial({
+            map: new THREE.TextureLoader().load('bg.jpg')
+        });
+        var bgPlaneGeometry = new THREE.PlaneGeometry(10000, 10000, 500, 100);
+        var planeMesh = new THREE.Mesh(bgPlaneGeometry, bgMterial);
+        planeMesh.position.y = 100;
+        planeMesh.position.z = -2000;
+        planeMesh.name = 'bg';
+        scene.add(planeMesh);
+
+        if (Detector.webgl) {
+            renderer = new THREE.WebGLRenderer({ canvas: durrr, antialias: true });
+        }
+        else {
+            renderer = new THREE.CanvasRenderer({ canvas: durrr, alpha: true });
+        }
+
+        //LIGHTS
+        var ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+        scene.add(ambientLight);
+       
+        var pointLight = new THREE.PointLight(0xffffff, 1);
+        pointLight.position.set(-1000, 500, 1000)
+        scene.add(pointLight);
+
+
+        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.setSize(window.innerWidth, window.innerHeight);
+
+
+        document.addEventListener('mousemove', onDocumentMouseMove, false);
+        document.addEventListener('touchstart', onDocumentTouchStart, false);
+        document.addEventListener('touchmove', onDocumentTouchMove, false);
+        document.addEventListener( 'mousewheel', mousewheel, false );
+        //
+        window.addEventListener('resize', onWindowResize, false);
+    }
+
+    function getColor(currentColor) {
+        var colorArray = ['red', 'green', 'yellow', 'orange', '#e242f4', 'indigo', '#42f4bc'];
+
+        var currentIndex = colorArray.indexOf(currentColor);
+        var nextColorIndex = 0;
+        if (currentIndex >= colorArray.length - 1) {
+            nextColorIndex = 0;
+        } else {
+            nextColorIndex = currentIndex + 1;
+        }
+        return colorArray[nextColorIndex];
+    }
     function draw() {
         requestAnimationFrame(draw);
         analyser1.getByteFrequencyData(channel1FrequencyData);
         analyser2.getByteFrequencyData(channel2FrequencyData);
-        ctx.fillStyle = '#354147';
-        ctx.fillRect(0, 0, WIDTH, HEIGHT);
 
-        ctx.lineWidth = 1;
-        ctx.strokeStyle = '#E84C3D';
-
-        ctx.beginPath();
-
-        var sliceWidth = WIDTH * 1.0 / analyser1.frequencyBinCount;
-        var x = 0;
-        var gap = Math.round(analyser1.frequencyBinCount / 10);
-
-        for (var i = 0; i < analyser1.frequencyBinCount; i++) {
-            var y = channel1FrequencyData[i];
-            
-            ctx.moveTo(x, y);
-            ctx.lineTo(x, y);
-            x += sliceWidth;
-            console.log(x, y);
+        for (var i = scene.children.length - 1, j = 0; i >= 0; i-- , j++) {
+            if(scene.children[j].name != 'bg') {
+                var scale = (channel1FrequencyData[j]);
+                scale = scale == 0 ? 1 : scale;
+                particle = scene.children[j];
+                particle.position.y = scale * 2;
+            }
         }
-
-        ctx.lineTo(WIDTH / 2, HEIGHT / 2);
-        ctx.stroke();
+        camera.position.z += (mouseZ);
+        mouseZ = 0;
+        camera.position.x += (mouseX - camera.position.x) * .05;
+        camera.position.y += (- mouseY - camera.position.y) * .05;
+        camera.lookAt(scene.position);
+        renderer.render(scene, camera);
     }
 
     function fetchSound() {
@@ -80,6 +160,37 @@
             source.start(0);
             draw();
         });
+    }
+
+    function onWindowResize() {
+        windowHalfX = window.innerWidth / 2;
+        windowHalfY = window.innerHeight / 2;
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    }
+    //
+    function onDocumentMouseMove(event) {
+        mouseX = event.clientX - windowHalfX;
+        mouseY = event.clientY - windowHalfY;
+    }
+    function onDocumentTouchStart(event) {
+        if (event.touches.length > 1) {
+            event.preventDefault();
+            mouseX = event.touches[0].pageX - windowHalfX;
+            mouseY = event.touches[0].pageY - windowHalfY;
+        }
+    }
+    function onDocumentTouchMove(event) {
+        if (event.touches.length == 1) {
+            event.preventDefault();
+            mouseX = event.touches[0].pageX - windowHalfX;
+            mouseY = event.touches[0].pageY - windowHalfY;
+        }
+    }
+    function mousewheel(event) {
+        mouseZ = Math.sign(event.wheelDelta) * 20;
+        mouseZ*= -1;
     }
 
 })();
