@@ -60,7 +60,7 @@
         var colorCounter = 0;
         for (var ix = 0; ix < AMOUNTX; ix++) {
             for (var iy = 0; iy < AMOUNTY; iy++) {
-                colorCounter++;
+                colorCounte r++;
                 if (colorCounter % 200 == 0) {
                     color = getColor(color);
                 }
@@ -135,7 +135,7 @@
 
     function fetchSound() {
         var xhr = new XMLHttpRequest();
-        xhr.open('GET', 'vocals.mp3', true);
+        xhr.open('GET', 'Ichaapi.mp3', true);
         xhr.responseType = 'arraybuffer';
         xhr.onload = function () {
             processArrayBuffer(xhr.response);
